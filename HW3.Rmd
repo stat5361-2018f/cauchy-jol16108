@@ -1,0 +1,212 @@
+---
+title: "HW3"
+author: JooChul Lee
+date: "`r format(Sys.time(), '%d %B %Y')`"
+documentclass: article
+knit: "bookdown::render_book('Exercise2.Rmd', 'bookdown::pdf_document2')"
+fontsize: 11pt
+papersize: letter
+abstract: This is the second homework of STAT-5361. There are two parts; One is the Exercise 2 and the other is the Exerxise 3. For the exercise2, I consider approximation of the standard normal distribution by the Monte Carlo method and compare the true value. Also, I repeat the experiment 100 times and draw box plots for the bias for all $t$. For the exercise3, I define .Machine$double.xmax, .Machine$double.xmin, .Machine$double.eps, and .Machine@double.neg.eps by using the 64-bit double precision floating point arithmetic. 
+---
+
+
+```{r setup, echo = FALSE, message = FALSE, warning = FALSE}
+
+## for latex and html output
+isHtml <- knitr::is_html_output()
+isLatex <- knitr::is_latex_output()
+latex <- ifelse(isLatex, '\\LaTeX\\', 'LaTeX')
+
+## specify global chunk options
+knitr::opts_chunk$set(fig.width = 5, fig.height = 4, dpi = 300,
+                      out.width = "90%", fig.align = "center")
+
+```
+
+# Howework 3
+
+Consider estimating the location parameter of a Cauchy distribution with a known scale parameter. The density function is
+\begin{align*}
+  f(x; \theta) = \frac{1}{\pi[1 + (x - \theta)^2]}, 
+  \quad x \in R, \quad \theta \in R.
+\end{align*}
+Let $X_1, \ldots, X_n$ be a random sample of size $n$ and $\ell(\theta)$ the log-likelihood function of $\theta$ based on the sample.
+
+## Show that $\ell(\theta), \ell'(\theta), \ell''(\theta), I_n(\theta)$
+
+Likelhood function : $$L(\theta) = \prod_{i=1}^n \dfrac{1}{\pi[1 + (x_i - \theta)^2]}$$
+Then, loglikelhood funcion, $\ell(\theta)$ :
+$$\ell(\theta) = log\prod_{i=1}^n \dfrac{1}{\pi[1 + (x_i - \theta)^2]} = log\pi^{-n} + \sum_{i=1}^nlog \dfrac{1}{\pi[1 + (x_i - \theta)^2]} = -nlog\pi - \sum_{i=1}^nlog[1 + (\theta - x_i )^2]$$
+$\ell'(\theta)$ : $$ \ell'(\theta) = \frac{d}{d\theta}\ell(\theta) = -2 \sum_{i=1}^n\frac{\theta-x_i}{1 + (\theta-x_i)^2}$$
+
+$\ell''(\theta)$ : $$ \ell'(\theta) = \frac{d}{d\theta}\ell(\theta) = -2 \sum_{i=1}^n(\frac{1}{1+ (\theta - x_i)^2} - \frac{\theta-x_i}{1 + (\theta-x_i)^2}) = -2 \sum_{i=1}^n\frac{1-(\theta-x_i)^2}{(1 + (\theta-x_i)^2)^2}$$
+
+$I_n(\theta)$ : $$ -E(\ell''(\theta)) = n \int_R \dfrac{1-(x-\theta)^2}{(1+(x-\theta)^2)^2}\frac{1}{\pi(1+(x-\theta)^2)}d$$
+Since $\frac{d(\dfrac{x}{1+x^2})}{dx} = \dfrac{1-(x-\theta)^2}{(1+(x-\theta)^2)^2}$,
+$$I_n(\theta) =  \frac{2n}{\pi}\int_R\frac{d(\dfrac{x}{1+x^2})}{dx}\frac{1}{1+x^2}dx$$
+Then by integration by Parts,
+$$ I_n(\theta) = \frac{4n}{\pi}\int_R \frac{x^2}{(1+x^2)^3}dx = \frac{4n}{\pi}\int^{\frac{\pi}{2}}_{\frac{\pi}{2}}sin^2\theta cos^2\theta d\theta = \frac{4n}{\pi}\int^{\frac{\pi}{2}}_{\frac{\pi}{2}}\frac{sin^2 2\theta}{4} d\theta = \frac{n}{\pi}\frac{\theta}{2} -\frac{n}{\pi}\frac{sin4\theta}{8}|^{\frac{\pi}{2}}_{\frac{\pi}{2}} = \frac{n}{\pi}\frac{\pi}{2} = \frac{n}{2} $$
+
+## Implement a loglikelihood function and plot against $\theta$
+
+```{r, echo=TRUE}
+set.seed(20180909)
+n = 10
+sample = rcauchy(n, location = 5, scale = 1) 
+
+log_lik = function(theta)
+{
+   result = -length(sample) * log(pi) - sum( log( 1 + (theta - sample)^2 ) )
+   return(result)
+}
+curve(sapply(x, FUN = log_lik), -5, 10, xlab = expression(theta),ylab = 'loglikleyhood')
+title(main="plot against theta")
+```
+It set the random seed as 20180909 and generate a random sample of size $n=10$
+ with $\theta=5$. Form the plot, MLE is around 5.6
+ 
+## Find the MLE of $\theta$ using the Newton-Raphson method
+When you look at the plot and table, 6 cases for intial vaules is converged. For the other cases, it is not converged even though the maximum iteration inceases. The converged values are around 5.68. Also, we can check that the root is converged when the initial values is around 5.
+
+```{r, echo=TRUE}
+set.seed(20180909)
+n = 10
+sample = rcauchy(n, location = 5, scale = 1) 
+F_S_D = function(theta)
+{
+   First = -2 * sum( (theta-sample)/(1+(theta-sample)^2) ) 
+   Second = -2 * sum( (1 - (theta-sample)^2)/(1+(theta-sample)^2)^2 ) 
+   list(First = First, Second= Second )
+}
+
+N_R = function(initial, max = 100, tol = 1e-5)
+{  
+   current = initial
+   for(i in 1:max)
+   {
+      new = current - F_S_D(current)$First/F_S_D(current)$Second
+      if(abs(new -current) < tol) break
+      current1 = current
+      current = new
+   }   
+   return( c(current, i, diff = abs(current -current1) ) )
+}
+initial = seq(-10, 20, by = 0.5)
+result = matrix(0, length(initial), 3)
+for(i in 1:length(initial))
+{
+   result[i,] = N_R(initial[i],200)
+}
+colnames(result) = c('Root', '# iter.', 'Difference b/w new and current')
+rownames(result) = paste('Initial =',seq(-10, 20, by = 0.5))
+
+plot(seq(-10, 20, by = 0.5), result[,1], ylab = 'Root', xlab = '')
+knitr::kable(result[1:30,], booktabs = TRUE,align='c',
+             row.names = 1)
+knitr::kable(result[31:61,], booktabs = TRUE,align='c',
+             row.names = 1)
+```
+
+\newpage
+## Apply fixed-point iterations using $G(\theta)=\alpha \ell'(\theta) + \theta$
+When you look at the plot and table, it is not converged in the case of $\alpha = 1, 0.64$ even though the maximum iteration inceases for all initial values. But when $\alpha=0.25$, values are converged at around 5.68 regardless intital values.
+```{r, echo=TRUE}
+set.seed(20180909)
+n = 10
+sample = rcauchy(n, location = 5, scale = 1) 
+F_D = function(theta)
+{
+   First = -2 * sum( (theta-sample)/(1+(theta-sample)^2) ) 
+   return(First)
+}
+
+Fixed = function(initial, alpha, max = 100, tol = 1e-5)
+{  
+   current = initial
+   for(i in 1:max)
+   {
+      new = current + (alpha*F_D(current))
+      if(abs(new -current) < tol) break
+      current1 = current
+      current = new
+   }   
+   return( c(current, i, diff = abs(current -current1) ) )
+} 
+initial = seq(-10, 20, by = 0.5)
+result_1 = matrix(0, length(initial), 3)
+result_0.64 = matrix(0, length(initial), 3)
+result_0.25 = matrix(0, length(initial), 3)
+for(i in 1:length(initial))
+{
+   result_1[i,] = Fixed(initial[i], 1 ,10000)
+   result_0.64[i,] = Fixed(initial[i],0.64,10000)
+   result_0.25[i,] = Fixed(initial[i],0.25, 10000)
+}   
+colnames(result_1)<- colnames(result_0.64)<- colnames(result_0.25)<-
+    c('Root', '# iter.', 'Difference b/w new and current')
+rownames(result_1) <- rownames(result_0.64) <- rownames(result_0.25) <- 
+    paste('Initial =',seq(-10, 20, by = 0.5))
+
+plot(seq(-10, 20, by = 0.5), result_1[,1], ylab = 'Root', xlab = '')
+plot(seq(-10, 20, by = 0.5), result_0.64[,1], ylab = 'Root', xlab = '')
+plot(seq(-10, 20, by = 0.5), result_0.25[,1], ylab = 'Root', xlab = '')
+knitr::kable(result_1[1:30,], booktabs = TRUE,align='c',
+             row.names = 1,caption = 'Table for alpha =1')
+knitr::kable(result_1[31:61,], booktabs = TRUE,align='c',
+             row.names = 1,caption = 'Table for alpha =1')
+knitr::kable(result_0.64[1:30,], booktabs = TRUE,align='c',
+             row.names = 1,caption = 'Table for alpha =0.64')
+knitr::kable(result_0.64[31:61,], booktabs = TRUE,align='c',
+             row.names = 1,caption = 'Table for alpha =0.64')
+knitr::kable(result_0.25[1:30,], booktabs = TRUE,align='c',
+             row.names = 1,caption = 'Table for alpha =0.25')
+knitr::kable(result_0.25[31:61,], booktabs = TRUE,align='c',
+             row.names = 1,caption = 'Table for alpha =0.25')
+```
+
+\newpage
+## First use Fisher scoring to find the MLE for $\theta$
+
+When you look at the plot and table, the values are converged around 5.68 for all initial values. But the iterations for it are different with each other. 
+```{r}
+set.seed(20180909)
+n = 10
+sample = rcauchy(n, location = 5, scale = 1) 
+F_D = function(theta)
+{
+   First = -2 * sum( (theta-sample)/(1+(theta-sample)^2) ) 
+   return(First)
+}
+
+N_R = function(initial, max = 100, tol = 1e-5)
+{  
+   current = initial
+   for(i in 1:max)
+   {
+      new = current + 2 * F_D(current)/n
+      if(abs(new -current) < tol) break
+      current1 = current
+      current = new
+   }   
+   return( c(current, i, diff = abs(current -current1) ) )
+}
+initial = seq(-10, 20, by = 0.5)
+result = matrix(0, length(initial), 3)
+for(i in 1:length(initial))
+{
+   result[i,] = N_R(initial[i],200)
+} 
+colnames(result) = c('Root', '# iter.', 'Difference b/w new and current')
+rownames(result) = paste('Initial =',seq(-10, 20, by = 0.5))
+
+plot(seq(-10, 20, by = 0.5), result[,1], ylab = 'Root', xlab = '')
+knitr::kable(result[1:30,], booktabs = TRUE,align='c',
+             row.names = 1)
+knitr::kable(result[31:61,], booktabs = TRUE,align='c',
+             row.names = 1)
+```
+
+\newpage
+## Comment on the results from different methods
+
+In the conclusion, the roots could be converged or not according to intial values in the case of Newton-Raphson with second derivative. It means that the algorithm might be unstable. But when it is converged, the converging speed very fast compared to fixed point algorithm. Also, the roots could be converged or not according to alpha in the case of  the Fixed point algorithm. It means that we can say that it is not stable for alpha even though it is converged for all initial values, but the converging speed is quite fast. For Newton-Raphson with fisher scoring, the values are converged for all initial values and also, the speed is fast compared to two other algoritm. Thus, we can conclude that Newton-Raphson with fisher scoring is more constant and faster than the others in this example.
